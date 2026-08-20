@@ -1,0 +1,71 @@
+From: DroidSpaces Kernel Team <kernel@droidspaces.org>
+Subject: [PATCH] GKI kABI fix patch template
+
+This is a template patch file. You need to:
+1. Find the actual kABI-breaking changes in your kernel source
+2. Fill in the correct context lines (marked with ?)
+3. Ensure the patch applies cleanly with 'patch --dry-run'
+
+---
+ ipc/Makefile          |  2 +-
+ ipc/sysv.c            | 10 +++++++++-
+ ipc/util.c            |  8 +++++++-
+ include/linux/ipc.h   |  5 +++++
+ include/linux/msg.h   |  3 +++
+ include/linux/sem.h   |  3 +++
+ include/linux/shm.h   |  3 +++
+ 7 files changed, 32 insertions(+), 3 deletions(-)
+
+diff --git a/ipc/Makefile b/ipc/Makefile
+index ????..???? 100644
+--- a/ipc/Makefile
++++ b/ipc/Makefile
+@@ -? +? @@ 
+-obj-y += util.o
++obj-y += util.o kabi_fix.o
+diff --git a/ipc/sysv.c b/ipc/sysv.c
+index ????..???? 100644
+--- a/ipc/sysv.c
++++ b/ipc/sysv.c
+@@ -? +? @@ 
++/* DroidSpaces kABI fix: Add backward compatibility shims */
++#ifdef CONFIG_SYSVIPC
++static struct ipc_ids sysv_ipc_ids;
++#endif
+diff --git a/ipc/util.c b/ipc/util.c
+index ????..???? 100644
+--- a/ipc/util.c
++++ b/ipc/util.c
+@@ -? +? @@ 
++/* DroidSpaces kABI fix: Export hidden symbols for kABI compatibility */
++EXPORT_SYMBOL_GPL(ipc_lock);
++EXPORT_SYMBOL_GPL(ipc_unlock);
+diff --git a/include/linux/ipc.h b/include/linux/ipc.h
+index ????..???? 100644
+--- a/include/linux/ipc.h
++++ b/include/linux/ipc.h
+@@ -? +? @@ 
++/* DroidSpaces kABI fix: Add missing struct members for kABI compatibility */
++
+diff --git a/include/linux/msg.h b/include/linux/msg.h
+index ????..???? 100644
+--- a/include/linux/msg.h
++++ b/include/linux/msg.h
+@@ -? +? @@ 
++/* DroidSpaces kABI fix: Message queue compatibility */
++
+diff --git a/include/linux/sem.h b/include/linux/sem.h
+index ????..???? 100644
+--- a/include/linux/sem.h
++++ b/include/linux/sem.h
+@@ -? +? @@ 
++/* DroidSpaces kABI fix: Semaphore compatibility */
++
+diff --git a/include/linux/shm.h b/include/linux/shm.h
+index ????..???? 100644
+--- a/include/linux/shm.h
++++ b/include/linux/shm.h
+@@ -? +? @@ 
++/* DroidSpaces kABI fix: Shared memory compatibility */
++
+-- 

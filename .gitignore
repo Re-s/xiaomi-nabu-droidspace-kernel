@@ -1,0 +1,105 @@
+# ============================================
+# DroidSpaces Kernel Build - Git Ignore
+# ============================================
+
+# Build output directories
+out/
+release/
+logs/
+tmp/
+
+# Kernel source (if cloned locally)
+kernel/
+linux-*/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Compiled files
+*.o
+*.o.d
+*.ko
+*.mod
+*.mod.c
+*.cmd
+.tmp_versions/
+modules.order
+Module.symvers
+
+# AnyKernel3 temporary files
+AnyKernel3/Image
+AnyKernel3/*.dtb
+AnyKernel3/modules/
+AnyKernel3/.anykernel
+
+# Package files
+*.zip
+*.tar.gz
+*.tar.bz2
+
+# Log files
+*.log
+build.log
+kernel_compile.log
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.orig
+
+# System files
+system/
+vendor/
+
+# Downloaded tools
+tools/
+prebuilts/
+
+# Cache
+.cache/
+*.cache
+
+# Documentation build
+docs/_build/
+docs/html/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Node.js (if using any web tools)
+node_modules/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# GitHub Actions artifacts
+.github/actions-cache/
+
+# Custom local configuration
+local.mk
+local.config
+
+# Backup files
+*.backup
+*.backup.*
+boot_backup_*.img
+
+# Recovery images
+recovery.img
+twrp.img
+orangefox.img
+
+# AnyKernel3 logs
+AnyKernel3/*.log
+AnyKernel3/last_log
