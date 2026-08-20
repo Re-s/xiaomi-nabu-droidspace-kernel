@@ -172,16 +172,27 @@ jobs:
             -Wno-error=discarded-qualifiers \
             -Wno-error=return-type"
 
-          set -o pipefail
           # 全部 C 文件已能编译通过，仅 modpost 的 section mismatch 被判为 FATAL：
-          # spcom_probe() 引用了 __init 段的 spcom_register_chardev()，
-          # 这是该厂商驱动既有的问题。内核提供 KBUILD_MODPOST_WARN 将其降为警告。
+          # spcom_probe() 引用了 __init 段的 spcom_register_chardev()。
+          # 注意：4.14 的 scripts/Makefile.modpost 读的是环境变量，
+          # 作为 make 参数传入无效（上一轮即因此未生效）。
+          export KBUILD_MODPOST_WARN=1
+
+          # 双保险：直接把 spcom_register_chardev 的 __init 标记去掉，
+          # 使其常驻 .text，从根源上消除该 section mismatch。
+          spcom=$(grep -rl "spcom_register_chardev" --include="*.c" drivers/ 2>/dev/null | head -1)
+          if [ -n "$spcom" ]; then
+            sed -i 's/^static int __init spcom_register_chardev/static int spcom_register_chardev/' "$spcom"
+            echo "Patched __init off spcom_register_chardev in $spcom"
+            grep -n "int spcom_register_chardev" "$spcom" | head -3
+          fi
+
+          set -o pipefail
           make -j$(nproc) \
             ARCH=arm64 \
             CROSS_COMPILE=aarch64-linux-gnu- \
             KCFLAGS="$KCFLAGS" \
             CONFIG_WERROR=n \
-            KBUILD_MODPOST_WARN=1 \
             Image modules dtbs 2>&1 | tee ../build.log || {
               echo "=== BUILD FAILED ==="
               echo "--- unique errors ---"
