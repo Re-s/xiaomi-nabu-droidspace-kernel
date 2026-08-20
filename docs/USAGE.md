@@ -1104,7 +1104,7 @@ adb shell su -c "droidspaces system factory-reset"
 
 ## 📝 贡献
 
-如果你发现问题或有改进建议，请在 [Issues](https://github.com/your-username/xiaomi-nabu-droidspace-kernel/issues) 页面提交。
+如果你发现问题或有改进建议，请在 [Issues](https://github.com/Re-s/xiaomi-nabu-droidspace-kernel/issues) 页面提交。
 
 ---
 

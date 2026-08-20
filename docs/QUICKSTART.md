@@ -7,7 +7,7 @@
 **最快的方式，无需本地编译环境**
 
 ### 步骤 1：Fork 仓库
-1. 访问 [xiaomi-nabu-droidspace-kernel](https://github.com/your-username/xiaomi-nabu-droidspace-kernel)
+1. 访问 [xiaomi-nabu-droidspace-kernel](https://github.com/Re-s/xiaomi-nabu-droidspace-kernel)
 2. 点击右上角 **Fork** 按钮
 3. 等待 Fork 完成
 
@@ -34,7 +34,7 @@ sudo apt-get install -y git-core build-essential gcc-aarch64-linux-gnu \
     bc bison flex libssl-dev make libncurses-dev zip unzip python3
 
 # 2. 克隆仓库
-git clone --recursive https://github.com/your-username/xiaomi-nabu-droidspace-kernel.git
+git clone --recursive https://github.com/Re-s/xiaomi-nabu-droidspace-kernel.git
 cd xiaomi-nabu-droidspace-kernel
 
 # 3. 下载工具链

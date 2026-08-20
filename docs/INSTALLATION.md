@@ -74,7 +74,7 @@ adb devices
 
 ### 从 GitHub Releases 下载
 
-1. 访问 [Releases](https://github.com/your-username/xiaomi-nabu-droidspace-kernel/releases) 页面
+1. 访问 [Releases](https://github.com/Re-s/xiaomi-nabu-droidspace-kernel/releases) 页面
 2. 下载最新版本的 `DroidSpacesKernel-nabu-*.zip` 文件
 3. 验证文件完整性（可选）
 
@@ -261,4 +261,4 @@ adb shell su -c "echo '参数' > /proc/sys/kernel/参数名"
 
 ---
 
-如果遇到问题，请查看 [故障排除](TROUBLESHOOTING.md) 文档或在 [Issues](https://github.com/your-username/xiaomi-nabu-droidspace-kernel/issues) 页面提交问题。
+如果遇到问题，请查看 [故障排除](TROUBLESHOOTING.md) 文档或在 [Issues](https://github.com/Re-s/xiaomi-nabu-droidspace-kernel/issues) 页面提交问题。

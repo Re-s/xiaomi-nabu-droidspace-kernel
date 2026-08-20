@@ -51,11 +51,11 @@ sudo dnf install -y \
 
 ```bash
 # 克隆主仓库
-git clone --recursive https://github.com/your-username/xiaomi-nabu-droidspace-kernel.git
+git clone --recursive https://github.com/Re-s/xiaomi-nabu-droidspace-kernel.git
 cd xiaomi-nabu-droidspace-kernel
 
 # 或者克隆特定分支
-git clone -b droidspaces https://github.com/your-username/xiaomi-nabu-droidspace-kernel.git
+git clone -b droidspaces https://github.com/Re-s/xiaomi-nabu-droidspace-kernel.git
 ```
 
 ### 2. 初始化子模块
@@ -441,4 +441,4 @@ sudo swapon /swapfile
 
 ---
 
-如果遇到编译问题，请查看 [故障排除](TROUBLESHOOTING.md) 文档或在 [Issues](https://github.com/your-username/xiaomi-nabu-droidspace-kernel/issues) 页面提交问题。
+如果遇到编译问题，请查看 [故障排除](TROUBLESHOOTING.md) 文档或在 [Issues](https://github.com/Re-s/xiaomi-nabu-droidspace-kernel/issues) 页面提交问题。

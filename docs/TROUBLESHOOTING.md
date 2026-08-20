@@ -47,7 +47,7 @@ md5sum DroidSpacesKernel-nabu-*.zip
 # 对比官方发布的 MD5 值
 
 # 2. 重新下载内核文件
-wget https://github.com/your-username/xiaomi-nabu-droidspace-kernel/releases/download/v1.0/DroidSpacesKernel-nabu-YYYYMMDD.zip
+wget https://github.com/Re-s/xiaomi-nabu-droidspace-kernel/releases/download/v1.0/DroidSpacesKernel-nabu-YYYYMMDD.zip
 
 # 3. 检查设备型号
 adb shell getprop ro.product.model
@@ -371,4 +371,4 @@ echo "调试信息已保存到 debug_info.txt"
 
 ---
 
-如果以上方法都无法解决问题，请在 [Issues](https://github.com/your-username/xiaomi-nabu-droidspace-kernel/issues) 页面提交详细的问题报告。
+如果以上方法都无法解决问题，请在 [Issues](https://github.com/Re-s/xiaomi-nabu-droidspace-kernel/issues) 页面提交详细的问题报告。

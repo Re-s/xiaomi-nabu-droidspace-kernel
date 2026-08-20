@@ -15,7 +15,7 @@
 
 **解决方案**：本项目提供完整的内核配置和构建方案，需刷入自定义内核才能使用DroidSpaces。
 
-[![Build Kernel](https://github.com/your-username/xiaomi-nabu-droidspace-kernel/actions/workflows/build-kernel.yml/badge.svg)](https://github.com/your-username/xiaomi-nabu-droidspace-kernel/actions/workflows/build-kernel.yml)
+[![Build Kernel](https://github.com/Re-s/xiaomi-nabu-droidspace-kernel/actions/workflows/build-kernel.yml/badge.svg)](https://github.com/Re-s/xiaomi-nabu-droidspace-kernel/actions/workflows/build-kernel.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](./LICENSE)
 [![DroidSpaces Compatible](https://img.shields.io/badge/DroidSpaces-Compatible-green.svg)](https://github.com/ravindu644/Droidspaces-OSS)
 
@@ -53,7 +53,7 @@
 
 ### 1. 下载内核
 
-从 [Releases](https://github.com/your-username/xiaomi-nabu-droidspace-kernel/releases) 页面下载最新的内核压缩包。
+从 [Releases](https://github.com/Re-s/xiaomi-nabu-droidspace-kernel/releases) 页面下载最新的内核压缩包。
 
 ### 2. 刷入内核
 
@@ -116,7 +116,7 @@ adb shell ls /proc/sys/kernel/namespaces
 
 ```bash
 # 克隆仓库
-git clone --recursive https://github.com/your-username/xiaomi-nabu-droidspace-kernel.git
+git clone --recursive https://github.com/Re-s/xiaomi-nabu-droidspace-kernel.git
 cd xiaomi-nabu-droidspace-kernel
 
 # 安装依赖
@@ -179,7 +179,7 @@ make package
 如果遇到问题，请通过以下方式反馈：
 
 1. 查看 [故障排除](docs/TROUBLESHOOTING.md) 文档
-2. 在 [Issues](https://github.com/your-username/xiaomi-nabu-droidspace-kernel/issues) 页面提交问题
+2. 在 [Issues](https://github.com/Re-s/xiaomi-nabu-droidspace-kernel/issues) 页面提交问题
 3. 提供详细的错误信息和设备日志
 
 ## 📜 许可证
