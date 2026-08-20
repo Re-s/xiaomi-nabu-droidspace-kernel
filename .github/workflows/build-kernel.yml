@@ -106,22 +106,40 @@ jobs:
           done
           echo "Patched $patched Makefiles for tracepoint include resolution"
 
-          # 相机驱动的 trace 头还需要引用同级的 cam_context.h 等，
-          # 补上 cam_utils 及其兄弟目录的 include 路径。
+          # 高通相机子系统内部跨目录 include 极多（cam_context.h、
+          # cam_ife_hw_mgr.h、cam_isp_packet_parser.h ...），逐个列目录必然漏。
+          # 机械且完备的做法：把相机树下所有含 .h 的目录全部加入搜索路径，
+          # 写进根 Makefile 的 subdir-ccflags-y 以向所有子目录传播。
           cam="drivers/media/platform/msm/camera"
-          if [ -d "$cam" ]; then
-            for mk in $(find "$cam" -name Makefile); do
-              grep -q 'DROIDSPACES_CAM_INC' "$mk" && continue
+          if [ -d "$cam" ] && [ -f "$cam/Makefile" ]; then
+            if ! grep -q 'DROIDSPACES_CAM_INC' "$cam/Makefile"; then
               {
                 echo ""
                 echo "# DROIDSPACES_CAM_INC"
-                echo "ccflags-y += -I\$(srctree)/$cam/cam_utils"
-                echo "ccflags-y += -I\$(srctree)/$cam/cam_core"
-                echo "ccflags-y += -I\$(srctree)/$cam/cam_req_mgr"
-              } >> "$mk"
-            done
-            echo "Patched camera Makefiles with cross-directory includes"
+                find "$cam" -type d | while read -r d; do
+                  ls "$d"/*.h >/dev/null 2>&1 && \
+                    echo "subdir-ccflags-y += -I\$(srctree)/$d"
+                done
+              } >> "$cam/Makefile"
+              n=$(grep -c 'subdir-ccflags-y += -I' "$cam/Makefile")
+              echo "Patched camera root Makefile with $n header dirs"
+            fi
           fi
+
+          # 同理处理其它已知内部 include 密集的 msm 子系统
+          for sub in drivers/media/platform/msm/vidc drivers/media/platform/msm/sde; do
+            [ -d "$sub" ] && [ -f "$sub/Makefile" ] || continue
+            grep -q 'DROIDSPACES_SUB_INC' "$sub/Makefile" && continue
+            {
+              echo ""
+              echo "# DROIDSPACES_SUB_INC"
+              find "$sub" -type d | while read -r d; do
+                ls "$d"/*.h >/dev/null 2>&1 && \
+                  echo "subdir-ccflags-y += -I\$(srctree)/$d"
+              done
+            } >> "$sub/Makefile"
+            echo "Patched $sub with header dirs"
+          done
 
       - name: Build kernel
         run: |
@@ -173,29 +191,157 @@ jobs:
           echo "=== Build result ==="
           ls -lh arch/arm64/boot/Image
 
-      - name: Package
+      - name: Collect kernel output
         run: |
-          mkdir -p out release
+          mkdir -p out
           cp kernel/arch/arm64/boot/Image out/
           find kernel/arch/arm64/boot/dts -name "*nabu*.dtb" -exec cp {} out/ \; 2>/dev/null || true
           find kernel/arch/arm64/boot/dts -name "*sm8150*.dtb" -exec cp {} out/ \; 2>/dev/null || true
           cd kernel
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- INSTALL_MOD_PATH=../out/modules modules_install || true
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
+            INSTALL_MOD_PATH=../out/modules modules_install || true
           cd ..
-          cp out/Image release/
-          cp out/*.dtb release/ 2>/dev/null || true
-          cd release
-          zip -r ../DroidSpaces_nabu.zip .
+          echo "=== kernel output ==="
+          ls -lh out/
+          echo "dtb count: $(ls out/*.dtb 2>/dev/null | wc -l)"
+
+      - name: Build AnyKernel3 flashable zip
+        run: |
+          # AnyKernel3 在设备上就地替换 boot 分区里的内核，
+          # 复用设备自身的 ramdisk —— 因此无需 stock boot.img 即可产出
+          # 可刷入的成品，这是本项目的主交付物。
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git ak3
+          rm -rf ak3/.git ak3/README.md ak3/LICENSE
+          rm -f ak3/modules/system/lib/modules/placeholder 2>/dev/null || true
+
+          cp out/Image ak3/Image
+          for d in out/*.dtb; do [ -f "$d" ] && cp "$d" ak3/dtb 2>/dev/null && break; done
+
+          # 内核模块随包安装到 vendor
+          if [ -d out/modules/lib/modules ]; then
+            mkdir -p ak3/modules/vendor/lib/modules
+            find out/modules/lib/modules -name "*.ko" \
+              -exec cp {} ak3/modules/vendor/lib/modules/ \; 2>/dev/null || true
+            echo "bundled $(ls ak3/modules/vendor/lib/modules/*.ko 2>/dev/null | wc -l) modules"
+          fi
+
+          # nabu 专用 anykernel.sh
+          cat > ak3/anykernel.sh << 'AK3'
+### AnyKernel3 Ramdisk Mod Script
+## DroidSpaces Kernel - Xiaomi Pad 5 (nabu)
+
+properties() { '
+kernel.string=DroidSpaces Kernel for Xiaomi Pad 5 (nabu)
+do.devicecheck=1
+do.modules=1
+do.systemless=1
+do.cleanup=1
+do.cleanuponabort=0
+device.name1=nabu
+device.name2=Xiaomi Pad 5
+device.name3=21051182C
+device.name4=21051182G
+device.name5=21051182I
+supported.versions=
+supported.patchlevels=
+'; } # end properties
+
+# shell variables
+block=/dev/block/bootdevice/by-name/boot;
+is_slot_device=0;
+ramdisk_compression=auto;
+patch_vbmeta_flag=auto;
+
+## AnyKernel methods
+. tools/ak3-core.sh;
+
+## boot shell commands
+split_boot;
+flash_boot;
+flash_generic vendor_boot;
+
+## end commands
+AK3
+
+          cd ak3
+          zip -r9 ../DroidSpaces_nabu_AnyKernel3.zip * -x .git
           cd ..
-          ls -lh DroidSpaces_nabu.zip
+          echo "=== AnyKernel3 zip ==="
+          ls -lh DroidSpaces_nabu_AnyKernel3.zip
+          unzip -l DroidSpaces_nabu_AnyKernel3.zip | tail -5
+
+      - name: Build boot.img
+        run: |
+          # 若仓库提供了 stock boot.img（HyperOS 1.0.3.0TKXCNXM 抽取），
+          # 则用其 ramdisk 直接合成 boot.img；否则说明原因并跳过。
+          sudo apt-get install -y android-sdk-libsparse-utils abootimg 2>/dev/null || true
+          git clone --depth=1 https://android.googlesource.com/platform/system/tools/mkbootimg mkbootimg-tools 2>/dev/null || true
+
+          STOCK=""
+          for c in stock/boot.img stock_boot.img prebuilt/boot.img; do
+            [ -f "$c" ] && STOCK="$c" && break
+          done
+
+          if [ -z "$STOCK" ]; then
+            echo "::notice::No stock boot.img in repo -> boot.img not synthesized."
+            echo "AnyKernel3 zip is the flashable deliverable (it patches boot in-place"
+            echo "and reuses the device ramdisk, so it needs no stock image)."
+            echo ""
+            echo "To also get a raw boot.img, commit the stock one to stock/boot.img:"
+            echo "  adb shell su -c 'dd if=/dev/block/bootdevice/by-name/boot of=/sdcard/boot.img'"
+            echo "  adb pull /sdcard/boot.img stock/boot.img"
+            exit 0
+          fi
+
+          echo "Found stock boot.img: $STOCK"
+          python3 mkbootimg-tools/unpack_bootimg.py \
+            --boot_img "$STOCK" --out unpacked | tee unpack.txt
+
+          PAGESIZE=$(grep -oP 'page size:\s*\K[0-9]+' unpack.txt | head -1); PAGESIZE=${PAGESIZE:-4096}
+          HDRV=$(grep -oP 'boot image header version:\s*\K[0-9]+' unpack.txt | head -1); HDRV=${HDRV:-2}
+          OSVER=$(grep -oP 'os version:\s*\K[0-9.]+' unpack.txt | head -1); OSVER=${OSVER:-13.0.0}
+          OSPL=$(grep -oP 'os patch level:\s*\K[0-9-]+' unpack.txt | head -1); OSPL=${OSPL:-2024-01}
+          CMDLINE=$(grep -oP 'command line args:\s*\K.*' unpack.txt | head -1)
+
+          ARGS="--kernel out/Image --ramdisk unpacked/ramdisk --header_version $HDRV --pagesize $PAGESIZE --os_version $OSVER --os_patch_level $OSPL"
+          [ -n "$CMDLINE" ] && ARGS="$ARGS --cmdline \"$CMDLINE\""
+          [ -f unpacked/dtb ] && ARGS="$ARGS --dtb unpacked/dtb"
+
+          eval python3 mkbootimg-tools/mkbootimg.py $ARGS -o out/boot.img
+          echo "=== boot.img ==="
+          ls -lh out/boot.img
+
+      - name: Build summary
+        run: |
+          echo "## DroidSpaces Kernel Build" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Device: Xiaomi Pad 5 (nabu) | Target: HyperOS 1.0.3.0TKXCNXM" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Artifact | Size |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          [ -f DroidSpaces_nabu_AnyKernel3.zip ] && \
+            echo "| DroidSpaces_nabu_AnyKernel3.zip | $(du -h DroidSpaces_nabu_AnyKernel3.zip | cut -f1) |" >> $GITHUB_STEP_SUMMARY
+          [ -f out/boot.img ] && \
+            echo "| boot.img | $(du -h out/boot.img | cut -f1) |" >> $GITHUB_STEP_SUMMARY
+          [ -f out/Image ] && \
+            echo "| Image | $(du -h out/Image | cut -f1) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Flash" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "# Recovery (AnyKernel3, recommended)" >> $GITHUB_STEP_SUMMARY
+          echo "adb push DroidSpaces_nabu_AnyKernel3.zip /sdcard/ && flash in TWRP" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: Upload
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: droidspaces-kernel-nabu
           path: |
-            out/
-            release/
-            DroidSpaces_nabu.zip
+            DroidSpaces_nabu_AnyKernel3.zip
+            out/boot.img
+            out/Image
+            out/*.dtb
             build.log
           retention-days: 30
+          if-no-files-found: warn
