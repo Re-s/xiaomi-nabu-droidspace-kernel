@@ -15,17 +15,46 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ccache 让重复构建复用编译产物，避免每次从零编译
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-nabu-4.14-${{ github.sha }}
+          restore-keys: |
+            ccache-nabu-4.14-
+
       - name: Setup
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential bc bison flex libssl-dev libelf-dev gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu git cpio zip unzip lz4 xz-utils device-tree-compiler libncurses-dev python3
+          sudo apt-get install -y build-essential bc bison flex libssl-dev libelf-dev \
+            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu git cpio zip unzip lz4 \
+            xz-utils device-tree-compiler libncurses-dev python3 ccache
           aarch64-linux-gnu-gcc --version | head -1
+          ccache -M 5G
+          ccache -z
+
+      # 内核源码约 2GB，缓存后省去每轮 clone
+      - name: Restore kernel source
+        id: kcache
+        uses: actions/cache@v4
+        with:
+          path: kernel
+          key: kernelsrc-nabu-HyperOS1-v1
 
       - name: Clone kernel
+        if: steps.kcache.outputs.cache-hit != 'true'
         run: |
           git clone --depth=1 -b HyperOS1 https://github.com/Kuugo2002/xiaomi_kernel_nabu.git kernel
-          head -5 kernel/Makefile
-          ls kernel/arch/arm64/configs/ | head -20
+
+      - name: Kernel source info
+        run: |
+          # 缓存命中时源码可能已被上轮补丁修改过，重置以保证可复现
+          cd kernel
+          git checkout -- . 2>/dev/null || true
+          git clean -fd 2>/dev/null || true
+          head -5 Makefile
+          ls arch/arm64/configs/ | head -20
 
       - name: Apply config
         run: |
@@ -190,7 +219,7 @@ jobs:
           set -o pipefail
           make -j$(nproc) \
             ARCH=arm64 \
-            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE="ccache aarch64-linux-gnu-" \
             KCFLAGS="$KCFLAGS" \
             CONFIG_WERROR=n \
             Image modules dtbs 2>&1 | tee ../build.log || {
@@ -204,6 +233,8 @@ jobs:
 
           echo "=== Build result ==="
           ls -lh arch/arm64/boot/Image
+          echo "=== ccache stats ==="
+          ccache -s | head -8
 
       - name: Collect kernel output
         run: |
