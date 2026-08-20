@@ -88,7 +88,43 @@ jobs:
       - name: Build kernel
         run: |
           cd kernel
-          make -j$(nproc) ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image modules dtbs 2>&1 | tee ../build.log
+          # 4.14 源码用现代 GCC 13 编译会触发大量新增警告，
+          # 而内核 Makefile 带 -Werror，需要放宽为非致命。
+          KCFLAGS="-Wno-error \
+            -Wno-error=misleading-indentation \
+            -Wno-error=designated-init \
+            -Wno-error=array-bounds \
+            -Wno-error=stringop-overflow \
+            -Wno-error=stringop-truncation \
+            -Wno-error=maybe-uninitialized \
+            -Wno-error=dangling-pointer \
+            -Wno-error=enum-conversion \
+            -Wno-error=address \
+            -Wno-error=unused-variable \
+            -Wno-error=unused-but-set-variable \
+            -Wno-error=implicit-fallthrough \
+            -Wno-error=packed-not-aligned \
+            -Wno-error=attributes \
+            -Wno-error=format-overflow \
+            -Wno-error=format-truncation \
+            -Wno-error=restrict \
+            -Wno-error=nonnull \
+            -Wno-error=memset-elt-size \
+            -Wno-error=sizeof-pointer-memaccess \
+            -Wno-error=pointer-sign \
+            -Wno-error=incompatible-pointer-types \
+            -Wno-error=int-conversion \
+            -Wno-error=discarded-qualifiers \
+            -Wno-error=return-type"
+
+          make -j$(nproc) \
+            ARCH=arm64 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            KCFLAGS="$KCFLAGS" \
+            CONFIG_WERROR=n \
+            Image modules dtbs 2>&1 | tee ../build.log
+
+          echo "=== Build result ==="
           ls -lh arch/arm64/boot/Image
 
       - name: Package
