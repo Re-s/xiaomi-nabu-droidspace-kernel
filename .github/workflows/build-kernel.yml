@@ -85,6 +85,18 @@ jobs:
             if grep -q "^${c}=y" .config; then echo "OK   ${c}"; else echo "MISS ${c}"; fi
           done
 
+      - name: Patch tracepoint include path
+        run: |
+          cd kernel
+          # drivers/hid/hid-trace.c 通过 define_trace.h 反向 include hid-trace.h，
+          # 但 4.14 的 drivers/hid/Makefile 没给该目标加 -I$(src)，
+          # 导致 TRACE_INCLUDE 解析失败。补上标准修法。
+          if [ -f drivers/hid/Makefile ] && ! grep -q 'CFLAGS_hid-trace.o' drivers/hid/Makefile; then
+            printf '\nCFLAGS_hid-trace.o += -I$(src)\n' >> drivers/hid/Makefile
+            echo "Patched drivers/hid/Makefile:"
+            tail -3 drivers/hid/Makefile
+          fi
+
       - name: Build kernel
         run: |
           cd kernel
@@ -117,12 +129,17 @@ jobs:
             -Wno-error=discarded-qualifiers \
             -Wno-error=return-type"
 
+          set -o pipefail
           make -j$(nproc) \
             ARCH=arm64 \
             CROSS_COMPILE=aarch64-linux-gnu- \
             KCFLAGS="$KCFLAGS" \
             CONFIG_WERROR=n \
-            Image modules dtbs 2>&1 | tee ../build.log
+            Image modules dtbs 2>&1 | tee ../build.log || {
+              echo "=== BUILD FAILED: first errors ==="
+              grep -iE "error:|fatal error:" ../build.log | head -20
+              exit 1
+            }
 
           echo "=== Build result ==="
           ls -lh arch/arm64/boot/Image
