@@ -126,20 +126,19 @@ jobs:
             fi
           fi
 
-          # 同理处理其它已知内部 include 密集的 msm 子系统
-          for sub in drivers/media/platform/msm/vidc drivers/media/platform/msm/sde; do
-            [ -d "$sub" ] && [ -f "$sub/Makefile" ] || continue
-            grep -q 'DROIDSPACES_SUB_INC' "$sub/Makefile" && continue
-            {
-              echo ""
-              echo "# DROIDSPACES_SUB_INC"
-              find "$sub" -type d | while read -r d; do
-                ls "$d"/*.h >/dev/null 2>&1 && \
-                  echo "subdir-ccflags-y += -I\$(srctree)/$d"
-              done
-            } >> "$sub/Makefile"
-            echo "Patched $sub with header dirs"
+          # 一劳永逸：凡是「同目录既有 .c 又有 .h」的目录，都给它的 Makefile
+          # 加上 -I$(src)。高通 BSP 大量驱动假定同级头文件可直接 include
+          # （idtp9418.c -> idtp9418.h 等），逐个子系统追下去不会收敛。
+          selfinc=0
+          for mk in $(find drivers techpack sound -name Makefile 2>/dev/null); do
+            d=$(dirname "$mk")
+            ls "$d"/*.c >/dev/null 2>&1 || continue
+            ls "$d"/*.h >/dev/null 2>&1 || continue
+            grep -q 'DROIDSPACES_SELF_INC' "$mk" && continue
+            printf '\n# DROIDSPACES_SELF_INC\nccflags-y += -I$(src)\n' >> "$mk"
+            selfinc=$((selfinc+1))
           done
+          echo "Patched $selfinc Makefiles with self-directory include"
 
       - name: Build kernel
         run: |
