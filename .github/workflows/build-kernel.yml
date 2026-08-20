@@ -85,16 +85,42 @@ jobs:
             if grep -q "^${c}=y" .config; then echo "OK   ${c}"; else echo "MISS ${c}"; fi
           done
 
-      - name: Patch tracepoint include path
+      - name: Patch tracepoint include paths (global)
         run: |
           cd kernel
-          # drivers/hid/hid-trace.c 通过 define_trace.h 反向 include hid-trace.h，
-          # 但 4.14 的 drivers/hid/Makefile 没给该目标加 -I$(src)，
-          # 导致 TRACE_INCLUDE 解析失败。补上标准修法。
-          if [ -f drivers/hid/Makefile ] && ! grep -q 'CFLAGS_hid-trace.o' drivers/hid/Makefile; then
-            printf '\nCFLAGS_hid-trace.o += -I$(src)\n' >> drivers/hid/Makefile
-            echo "Patched drivers/hid/Makefile:"
-            tail -3 drivers/hid/Makefile
+          # 高通 4.14 BSP 里多处 *-trace.c 通过 define_trace.h 反向 include
+          # 自己的 *-trace.h，但对应 Makefile 没给该目标加 -I$(src)，
+          # TRACE_INCLUDE 解析失败。逐个补会没完 —— 全局扫描处理。
+          #
+          # 做法：找出所有定义了 TRACE_INCLUDE_FILE / CREATE_TRACE_POINTS 的
+          # 目录，给该目录 Makefile 追加 ccflags-y += -I$(src)。
+          patched=0
+          for f in $(grep -rl "CREATE_TRACE_POINTS" --include="*.c" drivers/ techpack/ 2>/dev/null); do
+            d=$(dirname "$f")
+            mk="$d/Makefile"
+            [ -f "$mk" ] || continue
+            grep -q 'ccflags-y += -I$(src)' "$mk" && continue
+            printf '\nccflags-y += -I$(src)\n' >> "$mk"
+            echo "  patched $mk"
+            patched=$((patched+1))
+          done
+          echo "Patched $patched Makefiles for tracepoint include resolution"
+
+          # 相机驱动的 trace 头还需要引用同级的 cam_context.h 等，
+          # 补上 cam_utils 及其兄弟目录的 include 路径。
+          cam="drivers/media/platform/msm/camera"
+          if [ -d "$cam" ]; then
+            for mk in $(find "$cam" -name Makefile); do
+              grep -q 'DROIDSPACES_CAM_INC' "$mk" && continue
+              {
+                echo ""
+                echo "# DROIDSPACES_CAM_INC"
+                echo "ccflags-y += -I\$(srctree)/$cam/cam_utils"
+                echo "ccflags-y += -I\$(srctree)/$cam/cam_core"
+                echo "ccflags-y += -I\$(srctree)/$cam/cam_req_mgr"
+              } >> "$mk"
+            done
+            echo "Patched camera Makefiles with cross-directory includes"
           fi
 
       - name: Build kernel
@@ -136,8 +162,11 @@ jobs:
             KCFLAGS="$KCFLAGS" \
             CONFIG_WERROR=n \
             Image modules dtbs 2>&1 | tee ../build.log || {
-              echo "=== BUILD FAILED: first errors ==="
-              grep -iE "error:|fatal error:" ../build.log | head -20
+              echo "=== BUILD FAILED ==="
+              echo "--- unique errors ---"
+              grep -iE "error:|fatal error:" ../build.log | sort -u | head -25
+              echo "--- failed objects ---"
+              grep -E "^make.*\*\*\*.*Error" ../build.log | head -15
               exit 1
             }
 
