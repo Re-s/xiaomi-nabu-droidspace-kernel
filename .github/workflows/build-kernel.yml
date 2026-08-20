@@ -225,43 +225,38 @@ jobs:
             echo "bundled $(ls ak3/modules/vendor/lib/modules/*.ko 2>/dev/null | wc -l) modules"
           fi
 
-          # nabu 专用 anykernel.sh
+          # nabu 专用 anykernel.sh（heredoc 内容必须保持缩进，
+          # 否则会 dedent 出 YAML 块标量导致解析失败）
           cat > ak3/anykernel.sh << 'AK3'
-### AnyKernel3 Ramdisk Mod Script
-## DroidSpaces Kernel - Xiaomi Pad 5 (nabu)
-
-properties() { '
-kernel.string=DroidSpaces Kernel for Xiaomi Pad 5 (nabu)
-do.devicecheck=1
-do.modules=1
-do.systemless=1
-do.cleanup=1
-do.cleanuponabort=0
-device.name1=nabu
-device.name2=Xiaomi Pad 5
-device.name3=21051182C
-device.name4=21051182G
-device.name5=21051182I
-supported.versions=
-supported.patchlevels=
-'; } # end properties
-
-# shell variables
-block=/dev/block/bootdevice/by-name/boot;
-is_slot_device=0;
-ramdisk_compression=auto;
-patch_vbmeta_flag=auto;
-
-## AnyKernel methods
-. tools/ak3-core.sh;
-
-## boot shell commands
-split_boot;
-flash_boot;
-flash_generic vendor_boot;
-
-## end commands
-AK3
+          ### AnyKernel3 Ramdisk Mod Script
+          ## DroidSpaces Kernel - Xiaomi Pad 5 (nabu)
+          properties() { '
+          kernel.string=DroidSpaces Kernel for Xiaomi Pad 5 (nabu)
+          do.devicecheck=1
+          do.modules=1
+          do.systemless=1
+          do.cleanup=1
+          do.cleanuponabort=0
+          device.name1=nabu
+          device.name2=Xiaomi Pad 5
+          device.name3=21051182C
+          device.name4=21051182G
+          device.name5=21051182I
+          supported.versions=
+          supported.patchlevels=
+          '; } # end properties
+          block=/dev/block/bootdevice/by-name/boot;
+          is_slot_device=0;
+          ramdisk_compression=auto;
+          patch_vbmeta_flag=auto;
+          . tools/ak3-core.sh;
+          split_boot;
+          flash_boot;
+          AK3
+          # 去掉写入时带上的 10 空格缩进，还原为合法脚本
+          sed -i 's/^          //' ak3/anykernel.sh
+          echo "=== anykernel.sh ==="
+          cat ak3/anykernel.sh
 
           cd ak3
           zip -r9 ../DroidSpaces_nabu_AnyKernel3.zip * -x .git
@@ -326,11 +321,7 @@ AK3
           [ -f out/Image ] && \
             echo "| Image | $(du -h out/Image | cut -f1) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Flash" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "# Recovery (AnyKernel3, recommended)" >> $GITHUB_STEP_SUMMARY
-          echo "adb push DroidSpaces_nabu_AnyKernel3.zip /sdcard/ && flash in TWRP" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "Flash via TWRP: push the AnyKernel3 zip to /sdcard and install it." >> $GITHUB_STEP_SUMMARY
 
       - name: Upload
         uses: actions/upload-artifact@v4
