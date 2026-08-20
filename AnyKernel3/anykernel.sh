@@ -169,16 +169,50 @@ flash_boot() {
   # Get current kernel
   dd if=$block of=/tmp/boot_current.img 2>/dev/null;
 
-  # Extract ramdisk and prebuilt kernel
-  /tmp/anykernel/tools/mkbootimg \
-    --kernel kernel \
-    --ramdisk /tmp/boot_current.img \
-    --cmdline "console=ttyMSM0,115200n8 androidboot.hardware=qcom androidboot.console=ttyMSM0 androidboot.console=ttyMSM0,115200n8 msm_rtb.filter=0x237 ehci-hcd.park=3 lpm_levels.sleep_disabled=1 service_locator.enable=1 androidboot.bootdevice=7884000.ufshc androidboot.boot_devices=7884000.ufshc androidboot.boot_devices=7884000.ufshc" \
-    --base 0x0 \
-    --pagesize 4096 \
-    --os_version 12 \
-    --os_patch_level 2022-08 \
-    -o /tmp/boot.img.new 2>/dev/null;
+  # Extract ramdisk from current boot image using unpack_bootimg (if available)
+  # or use the ramdisk provided in the AnyKernel3 zip
+  local ramdisk_source;
+  if [ -f ramdisk.cpio.gz ]; then
+    ramdisk_source="ramdisk.cpio.gz";
+  elif [ -f ramdisk ]; then
+    ramdisk_source="ramdisk";
+  else
+    # Fall back to extracting ramdisk from current boot image
+    # This requires unpack_bootimg or manual extraction
+    ramdisk_source="";
+  fi
+
+  # Build mkbootimg command
+  local mkbootimg_cmd="/tmp/anykernel/tools/mkbootimg";
+  local mkbootimg_args="";
+
+  mkbootimg_args="--kernel kernel";
+
+  if [ -n "$ramdisk_source" ] && [ -f "$ramdisk_source" ]; then
+    mkbootimg_args="$mkbootimg_args --ramdisk $ramdisk_source";
+  else
+    mkbootimg_args="$mkbootimg_args --ramdisk /tmp/boot_current.img";
+  fi;
+
+  # SM8150-specific boot image parameters
+  mkbootimg_args="$mkbootimg_args --cmdline \"console=ttyMSM0,115200n8 androidboot.hardware=qcom androidboot.console=ttyMSM0 msm_rtb.filter=0x237 ehci-hcd.park=3 lpm_levels.sleep_disabled=1 service_locator.enable=1 androidboot.bootdevice=7884000.ufshc androidboot.boot_devices=7884000.ufshc\"";
+  mkbootimg_args="$mkbootimg_args --base 0x0";
+  mkbootimg_args="$mkbootimg_args --pagesize 4096";
+  mkbootimg_args="$mkbootimg_args --kernel_offset 0x00008000";
+  mkbootimg_args="$mkbootimg_args --ramdisk_offset 0x01f88000";
+  mkbootimg_args="$mkbootimg_args --tags_offset 0x00000100";
+  mkbootimg_args="$mkbootimg_args --header_version 2";
+  mkbootimg_args="$mkbootimg_args --os_version 12";
+  mkbootimg_args="$mkbootimg_args --os_patch_level 2022-08";
+  mkbootimg_args="$mkbootimg_args -o /tmp/boot.img.new";
+
+  ui_print "  mkbootimg args: $mkbootimg_args";
+  eval "$mkbootimg_cmd $mkbootimg_args" 2>/dev/null;
+
+  if [ $? -ne 0 ] || [ ! -f /tmp/boot.img.new ]; then
+    ui_print "! Error: mkbootimg failed to create boot image!";
+    abort "! Kernel installation aborted.";
+  fi
 
   # Flash new boot image
   dd if=/tmp/boot.img.new of=$block 2>/dev/null;
@@ -236,7 +270,19 @@ install_modules() {
 
   # Update module dependencies
   ui_print "- Updating module dependencies...";
-  depmod -a 2>/dev/null;
+  # Try depmod with current kernel version
+  local kernel_version;
+  kernel_version=$(uname -r 2>/dev/null);
+  if [ -n "$kernel_version" ]; then
+    ui_print "  - Kernel version: ${kernel_version}";
+    depmod -a "$kernel_version" 2>/dev/null;
+  else
+    depmod -a 2>/dev/null;
+  fi;
+
+  # Update module dependencies for vendor as well
+  ui_print "  - Syncing module dependencies...";
+  sync;
 
   ui_print "- Modules installed successfully.";
 } end install_modules

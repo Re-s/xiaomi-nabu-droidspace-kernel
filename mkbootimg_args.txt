@@ -1,0 +1,75 @@
+# Boot Image Configuration for Xiaomi Pad 5 (nabu)
+# Target: HyperOS 1.0.3.0TKXCNXM
+# SoC: Qualcomm SM8150 (Snapdragon 855)
+# This file records the precise parameters for generating boot.img
+#
+# Usage:
+#   mkbootimg $(grep -v '^#' mkbootimg_args.txt | tr '\n' ' ') -o boot.img
+#
+# Or with the wrapper script:
+#   AnyKernel3/tools/mkbootimg_wrapper --kernel Image --ramdisk ramdisk.cpio.gz --output boot.img
+
+# Kernel and Ramdisk paths
+kernel=Image
+ramdisk=ramdisk.cpio.gz
+
+# Boot image layout
+base=0x0
+pagesize=4096
+kernel_offset=0x00008000
+ramdisk_offset=0x01f88000
+tags_offset=0x00000100
+header_version=2
+
+# OS version info (matches HyperOS/MIUI 12.x base)
+os_version=12
+os_patch_level=2022-08
+
+# Kernel command line for SM8150 / Xiaomi Pad 5
+cmdline=console=ttyMSM0,115200n8 androidboot.hardware=qcom androidboot.console=ttyMSM0 msm_rtb.filter=0x237 ehci-hcd.park=3 lpm_levels.sleep_disabled=1 service_locator.enable=1 androidboot.bootdevice=7884000.ufshc androidboot.boot_devices=7884000.ufshc
+
+# Optional: DTB and DTBO (uncomment if needed)
+# dtb=dtb.img
+# dtbo=dtbo.img
+
+# Output
+# -o boot.img
+
+# ===================================================================
+# mkbootimg 完整命令参考
+# ===================================================================
+# 以下为等效的完整 mkbootimg 命令：
+#
+# mkbootimg \
+#   --kernel Image \
+#   --ramdisk ramdisk.cpio.gz \
+#   --cmdline "console=ttyMSM0,115200n8 androidboot.hardware=qcom androidboot.console=ttyMSM0 msm_rtb.filter=0x237 ehci-hcd.park=3 lpm_levels.sleep_disabled=1 service_locator.enable=1 androidboot.bootdevice=7884000.ufshc androidboot.boot_devices=7884000.ufshc" \
+#   --base 0x0 \
+#   --pagesize 4096 \
+#   --kernel_offset 0x00008000 \
+#   --ramdisk_offset 0x01f88000 \
+#   --tags_offset 0x00000100 \
+#   --header_version 2 \
+#   --os_version 12 \
+#   --os_patch_level 2022-08 \
+#   -o boot.img
+#
+# ===================================================================
+# ADB/Fastboot 刷机命令
+# ===================================================================
+# adb reboot bootloader
+# fastboot flash boot boot.img
+# fastboot reboot
+#
+# ===================================================================
+# 设备信息
+# ===================================================================
+# 设备名称: Xiaomi Pad 5
+# 代号: nabu
+# SoC: Qualcomm SM8150 (Snapdragon 855)
+# CPU: 1x Kryo 485 Gold (A76) @ 2.84GHz + 3x Kryo 485 Gold (A76) @ 2.4GHz + 4x Kryo 485 Silver (A55) @ 1.8GHz
+# RAM: 6GB LPDDR4X
+# 存储: 128GB / 256GB UFS 3.1
+# 屏幕: 11" IPS LCD, 2560x1600, 120Hz
+# 分区表: 非 A/B 分区 (is_slot_device=0)
+# Boot 分区: /dev/block/bootdevice/by-name/boot
