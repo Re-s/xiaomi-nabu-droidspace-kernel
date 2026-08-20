@@ -1,0 +1,7 @@
+# Stock boot.img header parameters
+# Source: nabu_images_OS1.0.3.0.TKXCNXM_20240516.0000.00_13.0_cn
+# stock boot.img sha256: 86523d97f2f0281a78899fe054c3d59b11012cad580dbb6341da4b1065dcac5c
+header_version=3
+os_version=13.0.0
+os_patch_level=2024-05
+pagesize=4096

@@ -322,6 +322,33 @@ jobs:
             [ -f "$c" ] && STOCK="$c" && break
           done
 
+          # 完整 boot.img 有 128MB，超出 git 合理体积；
+          # 因此也支持仅提交压缩后的 ramdisk + 头部参数。
+          if [ -z "$STOCK" ] && [ -f stock/ramdisk.gz ] && [ -f stock/bootimg_params.txt ]; then
+            echo "Using committed stock ramdisk + header params"
+            mkdir -p unpacked
+            gunzip -c stock/ramdisk.gz > unpacked/ramdisk
+            cat stock/bootimg_params.txt
+            HDRV=$(grep -oP 'header_version=\K[0-9]+' stock/bootimg_params.txt)
+            OSVER=$(grep -oP 'os_version=\K[0-9.]+' stock/bootimg_params.txt)
+            OSPL=$(grep -oP 'os_patch_level=\K[0-9-]+' stock/bootimg_params.txt)
+            PAGESIZE=$(grep -oP 'pagesize=\K[0-9]+' stock/bootimg_params.txt)
+
+            python3 mkbootimg-tools/mkbootimg.py \
+              --kernel out/Image \
+              --ramdisk unpacked/ramdisk \
+              --header_version "$HDRV" \
+              --pagesize "$PAGESIZE" \
+              --os_version "$OSVER" \
+              --os_patch_level "$OSPL" \
+              -o out/boot.img
+
+            echo "=== boot.img ==="
+            ls -lh out/boot.img
+            python3 mkbootimg-tools/unpack_bootimg.py --boot_img out/boot.img --out verify | head -8
+            exit 0
+          fi
+
           if [ -z "$STOCK" ]; then
             echo "::notice::No stock boot.img in repo -> boot.img not synthesized."
             echo "AnyKernel3 zip is the flashable deliverable (it patches boot in-place"
