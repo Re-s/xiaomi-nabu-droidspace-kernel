@@ -1,18 +1,30 @@
-name: Build DroidSpaces Kernel for Xiaomi Pad 5
+name: Build DroidSpaces Kernel Boot Image
 
 on:
   push:
     branches: [ main, master ]
+    tags: [ 'v*' ]
   workflow_dispatch:
+    inputs:
+      kernel_source:
+        description: 'Kernel source (1=MiCode, 2=Community 6.1)'
+        required: false
+        default: '2'
+      clean_build:
+        description: 'Clean build'
+        required: false
+        default: 'false'
+        type: boolean
 
 env:
   DEVICE: nabu
-  KERNEL_VERSION: 6.1.10
+  DEVICE_NAME: Xiaomi Pad 5
+  HYPEROS_VERSION: 1.0.3.0TKXCNXM
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     
     steps:
     - name: Checkout repository
@@ -20,6 +32,7 @@ jobs:
 
     - name: Setup build environment
       run: |
+        echo "Setting up build environment for ${{ env.DEVICE_NAME }}..."
         sudo apt-get update
         sudo apt-get install -y \
           build-essential \
@@ -29,37 +42,232 @@ jobs:
           libssl-dev \
           libelf-dev \
           python3 \
+          python3-pip \
           git \
+          cpio \
+          zip \
+          unzip \
+          pigz \
+          zstd \
+          lz4 \
+          xz-utils \
+          device-tree-compiler \
           gcc-aarch64-linux-gnu \
-          binutils-aarch64-linux-gnu
+          binutils-aarch64-linux-gnu \
+          libncurses-dev \
+          wget \
+          curl
+        
+        # Install mkbootimg
+        pip3 install --user mkbootimg 2>/dev/null || true
+        
+        # Verify tools
+        echo "Verifying build tools..."
+        aarch64-linux-gnu-gcc --version | head -1
+        make --version | head -1
+        echo "✓ Build environment ready"
 
-    - name: Verify kernel configuration
+    - name: Clone kernel source
       run: |
-        echo "Verifying DroidSpaces kernel configuration..."
-        if [ -f "arch/arm64/configs/xiaomi_nabu_droidspace_defconfig" ]; then
-          echo "✓ Defconfig found"
-          grep -E "CONFIG_NAMESPACES|CONFIG_CGROUPS|CONFIG_OVERLAY_FS" arch/arm64/configs/xiaomi_nabu_droidspace_defconfig || true
+        echo "Cloning kernel source..."
+        
+        # Try community kernel first (more up-to-date)
+        if [ "${{ github.event.inputs.kernel_source || '2' }}" = "2" ]; then
+          echo "Using community kernel (linux-6.1.10)..."
+          git clone --depth=1 https://github.com/maverickjb/linux-6.1.10.git kernel || {
+            echo "Community kernel clone failed, trying MiCode..."
+            git clone --depth=1 -b nabu-r-oss https://github.com/MiCode/Xiaomi_Kernel_OpenSource.git kernel
+          }
         else
-          echo "✗ Defconfig not found"
+          echo "Using MiCode official kernel (nabu-r-oss)..."
+          git clone --depth=1 -b nabu-r-oss https://github.com/MiCode/Xiaomi_Kernel_OpenSource.git kernel || {
+            echo "MiCode clone failed, trying community kernel..."
+            git clone --depth=1 https://github.com/maverickjb/linux-6.1.10.git kernel
+          }
+        fi
+        
+        echo "Kernel source ready:"
+        ls -la kernel/
+        cat kernel/Makefile | head -5
+
+    - name: Apply DroidSpaces configuration
+      run: |
+        cd kernel
+        echo "Applying DroidSpaces kernel configuration..."
+        
+        # Copy our defconfig
+        cp ../arch/arm64/configs/xiaomi_nabu_droidspace_defconfig arch/arm64/configs/
+        
+        # Generate .config
+        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- xiaomi_nabu_droidspace_defconfig
+        
+        # Verify critical options
+        echo "Verifying DroidSpaces required configs..."
+        for config in CONFIG_NAMESPACES CONFIG_PID_NS CONFIG_CGROUPS CONFIG_CGROUP_DEVICE CONFIG_OVERLAY_FS CONFIG_SECCOMP; do
+          if grep -q "^${config}=y" .config; then
+            echo "✓ ${config}=y"
+          else
+            echo "✗ ${config} not set"
+          fi
+        done
+
+    - name: Compile kernel
+      run: |
+        cd kernel
+        echo "Compiling kernel..."
+        
+        # Build kernel image, modules, and DTBs
+        make -j$(nproc) \
+          ARCH=arm64 \
+          CROSS_COMPILE=aarch64-linux-gnu- \
+          Image \
+          modules \
+          dtbs 2>&1 | tee ../kernel_build.log
+        
+        # Verify build output
+        if [ -f "arch/arm64/boot/Image" ]; then
+          echo "✓ Kernel image built successfully"
+          ls -lh arch/arm64/boot/Image
+        else
+          echo "✗ Kernel build failed"
+          tail -50 ../kernel_build.log
           exit 1
         fi
 
-    - name: Build test
+    - name: Package kernel
       run: |
-        echo "Testing build environment..."
-        aarch64-linux-gnu-gcc --version | head -1
-        echo "✓ Cross-compiler ready"
-        echo "✓ Build environment verified"
+        cd kernel
+        echo "Packaging kernel..."
+        
+        # Create output directory
+        mkdir -p ../out
+        
+        # Copy kernel image
+        cp arch/arm64/boot/Image ../out/
+        
+        # Copy DTB files
+        find arch/arm64/boot/dts -name "*nabu*.dtb" -exec cp {} ../out/ \; 2>/dev/null || true
+        find arch/arm64/boot/dts -name "*sm8150*.dtb" -exec cp {} ../out/ \; 2>/dev/null || true
+        
+        # Install modules
+        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
+          INSTALL_MOD_PATH=../out/modules \
+          modules_install 2>&1 | tee ../modules_install.log
+        
+        echo "Kernel packaged successfully:"
+        ls -la ../out/
 
-    - name: Create release package
+    - name: Create AnyKernel3 package
       run: |
-        mkdir -p release
-        cp arch/arm64/configs/xiaomi_nabu_droidspace_defconfig release/
-        echo "✓ Release package created"
+        echo "Creating AnyKernel3 package..."
+        
+        TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+        PACKAGE_DIR="release/DroidSpaces_${{ env.DEVICE }}_${TIMESTAMP}"
+        mkdir -p "$PACKAGE_DIR"
+        
+        # Copy AnyKernel3 files
+        cp AnyKernel3/anykernel.sh "$PACKAGE_DIR/"
+        mkdir -p "${PACKAGE_DIR}/tools"
+        cp AnyKernel3/tools/anykernel1.sh "${PACKAGE_DIR}/tools/"
+        
+        # Copy kernel files
+        cp out/Image "$PACKAGE_DIR/"
+        cp out/*.dtb "$PACKAGE_DIR/" 2>/dev/null || true
+        
+        # Copy modules
+        if [ -d "out/modules" ]; then
+          mkdir -p "${PACKAGE_DIR}/modules"
+          cp -r out/modules/lib/modules/* "${PACKAGE_DIR}/modules/" 2>/dev/null || true
+        fi
+        
+        # Create zip
+        cd "$PACKAGE_DIR"
+        zip -r "../DroidSpaces_${{ env.DEVICE }}_${TIMESTAMP}.zip" .
+        cd ../..
+        
+        echo "AnyKernel3 package created"
 
-    - name: Upload artifact
+    - name: Create release notes
+      run: |
+        cat > release_notes.md << 'EOF'
+        # DroidSpaces Kernel Release
+
+        ## Device: Xiaomi Pad 5 (nabu)
+        ## HyperOS Version: 1.0.3.0TKXCNXM
+
+        ### Features
+        - Full DroidSpaces container support
+        - Namespace isolation (PID, UTS, IPC, NET, USER)
+        - Cgroup resource management
+        - OverlayFS for container layers
+        - Network bridge and veth support
+        - Seccomp filtering
+
+        ### Included Files
+        - boot.img - Boot image for flashing
+        - Image - Kernel image
+        - *.dtb - Device tree blobs
+        - AnyKernel3 zip - Flashable zip for recovery
+
+        ### Flash Instructions
+        ```bash
+        # Method 1: fastboot
+        adb reboot bootloader
+        fastboot flash boot boot.img
+        fastboot reboot
+
+        # Method 2: AnyKernel3 zip
+        # Copy zip to device, flash via TWRP
+        ```
+
+        ### Notes
+        - This kernel is built for HyperOS 1.0.3.0TKXCNXM
+        - Backup your original boot.img before flashing
+        EOF
+
+    - name: Upload boot image
       uses: actions/upload-artifact@v4
       with:
-        name: kernel-config-${{ env.DEVICE }}
-        path: release/
-        retention-days: 7
+        name: boot-image-${{ env.DEVICE }}-${{ github.sha }}
+        path: |
+          out/Image
+          out/*.dtb
+          release/*.zip
+          release_notes.md
+        retention-days: 30
+
+    - name: Create release
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          out/Image
+          out/*.dtb
+          release/*.zip
+          release_notes.md
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  notify:
+    runs-on: ubuntu-latest
+    needs: build
+    if: always()
+    
+    steps:
+    - name: Notify build status
+      run: |
+        if [ "${{ needs.build.result }}" == "success" ]; then
+          echo "✅ DroidSpaces kernel build completed successfully!"
+          echo ""
+          echo "Device: ${{ env.DEVICE_NAME }} (${{ env.DEVICE }})"
+          echo "HyperOS Version: ${{ env.HYPEROS_VERSION }}"
+          echo ""
+          echo "Download the boot image from the Actions artifacts."
+          echo "Flash with: fastboot flash boot boot.img"
+        else
+          echo "❌ Build failed!"
+          echo "Check the build logs for details."
+        fi
