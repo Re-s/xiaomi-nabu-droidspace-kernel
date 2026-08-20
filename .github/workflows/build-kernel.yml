@@ -131,7 +131,7 @@ jobs:
         
         # Create AnyKernel3 zip
         TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-        PACKAGE_DIR="../release/DroidSpaces_${DEVICE}_${TIMESTAMP}"
+        PACKAGE_DIR="../release/DroidSpaces_nabu_${TIMESTAMP}"
         mkdir -p "$PACKAGE_DIR"
         
         cp ../out/Image "$PACKAGE_DIR/"
@@ -156,7 +156,7 @@ EOF
         
         # Create zip
         cd "$PACKAGE_DIR"
-        zip -r "../DroidSpaces_${DEVICE}_${TIMESTAMP}.zip" .
+        zip -r "../DroidSpaces_nabu_${TIMESTAMP}.zip" .
         cd ../..
         
         echo ""
